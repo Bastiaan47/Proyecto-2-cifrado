@@ -12,31 +12,29 @@ import os
 
 def grabar_audio(duration=5, sample_rate=44100, guardar_como=None):
     try:
-        print("comienza la grabación...")
+        print("grabando...")
         audio_data= sd.rec(int(duration * sample_rate), samplerate=sample_rate, channels=1, dtype='float64')
         sd.wait()
-        print("grabación completa.")
-        audio_data = audio_data.flatten()
-
+        print("grabacion completada.")
+        audio_data= audio_data.flatten()
         if guardar_como is not None:
             audio_data_16bit= (audio_data * 32767).astype(np.int16)
             wavfile.write(guardar_como, sample_rate, audio_data_16bit)
-            print(f"audio guardado como {guardar_como}")
-
+            #print(f"audio guardado como: {guardar_como}")
         return audio_data
     except Exception as e:
-        print(f"error al grabar el audio: {e}")
+        print(f"error al grabar audio: {e}")
         return None
 
 def calcular_huella_espectral(audio_data):
     fft_data= np.abs(fft(audio_data))
     huella= fft_data[:len(fft_data) // 2]
-    huella_normalizada= huella/np.max(huella)
+    huella_normalizada= huella / np.max(huella)
     return huella_normalizada
 
 def comparar_huellas(huella1, huella2, tolerancia=15):
     distancia= euclidean(huella1, huella2)
-    print(f"distancia calculada entre huellas: {distancia}")
+    print(f"distancia entre huella: {distancia}")
     return distancia <= tolerancia
 
 def transcribir_audio_en_memoria(archivo_wav):
@@ -47,7 +45,7 @@ def transcribir_audio_en_memoria(archivo_wav):
             texto= recognizer.recognize_google(audio, language='es-ES')
             return texto
     except Exception as e:
-        print(f"error al transcribir el audio: {e}")
+        print(f"Error al transcribir el audio: {e}")
         return None
 
 def texto_a_matriz_numerica(texto):
@@ -55,7 +53,7 @@ def texto_a_matriz_numerica(texto):
         matriz= np.array([[ord(char) for char in line] for line in texto.splitlines()])
         return matriz
     except Exception as e:
-        print(f"error al convertir el texto a matriz numrrica: {e}")
+        print(f"Error al convertir el texto a matriz numérica: {e}")
         return None
 
 def matriz_a_clave(matriz):
@@ -63,96 +61,139 @@ def matriz_a_clave(matriz):
     clave_bytes= (clave_bytes * (32 // len(clave_bytes) + 1))[:32]
     return clave_bytes
 
-def encriptar_archivo(nombre_archivo, matriz_clave, archivo_salida):
+def inversa_modular_matriz(matriz, mod=256):
+    determinante= int(round(np.linalg.det(matriz)))
+    determinante_inv= pow(determinante, -1, mod)
+    matriz_inversa= determinante_inv * np.round(determinante * np.linalg.inv(matriz)).astype(int) % mod
+    return matriz_inversa
+
+def hill_cipher_encrypt(data, key_matrix):
+    data_bytes= [ord(char) for char in data]
+    while len(data_bytes) % 2 != 0:
+        data_bytes.append(ord(' '))
+    data_matrix= np.array(data_bytes).reshape(-1, 2)
+    cipher_matrix= np.dot(data_matrix, key_matrix) % 256
+    return ''.join([chr(num) for num in cipher_matrix.flatten()])
+
+def hill_cipher_decrypt(data, key_matrix_inv):
+    data_bytes= [ord(char) for char in data]
+    data_matrix= np.array(data_bytes).reshape(-1, 2)
+    decrypted_matrix= np.dot(data_matrix, key_matrix_inv) % 256
+    return ''.join([chr(num) for num in decrypted_matrix.flatten()])
+
+def doble_encriptacion_hill_aes(nombre_archivo, hill_key_matrix, matriz_clave, archivo_salida):
     try:
-        with open(nombre_archivo, 'rb') as f:
-            datos= f.read()
-
-        clave= matriz_a_clave(matriz_clave)
-        cipher= AES.new(clave, AES.MODE_CBC)
+        with open(nombre_archivo, 'r') as f:
+            datos_texto= f.read()
+        texto_hill_cifrado= hill_cipher_encrypt(datos_texto.strip(), hill_key_matrix)
+        clave_aes= matriz_a_clave(matriz_clave)
+        cipher= AES.new(clave_aes, AES.MODE_CBC)
         iv= cipher.iv
-        datos_cifrados= cipher.encrypt(pad(datos, AES.block_size))
-
+        datos_cifrados= cipher.encrypt(pad(texto_hill_cifrado.encode(), AES.block_size))
         with open(archivo_salida, 'wb') as f:
             f.write(iv + datos_cifrados)
-        print(f"archivo cifrado guardado en {archivo_salida}")
-        messagebox.showinfo("exito", "Archivo encriptado correctamente.")
+        print(f"archivo cifrado en: {archivo_salida}")
+        messagebox.showinfo("buena", "archivo encriptado.")
     except Exception as e:
-        print(f"error al cifrar el archivo: {e}")
+        print(f"no se pudo la doble encriptacion: {e}")
 
-def desencriptar_archivo(nombre_archivo_cifrado, matriz_clave_descifrado, archivo_salida):
+def desencriptar_archivo(nombre_archivo_cifrado, matriz_clave_descifrado, hill_key_matrix, archivo_salida):
     try:
         with open(nombre_archivo_cifrado, 'rb') as f:
             contenido= f.read()
-
         iv= contenido[:16]
         datos_cifrados= contenido[16:]
         clave_descifrado= matriz_a_clave(matriz_clave_descifrado)
-
         cipher= AES.new(clave_descifrado, AES.MODE_CBC, iv)
-        datos_descifrados= unpad(cipher.decrypt(datos_cifrados), AES.block_size)
-
-        with open(archivo_salida, 'wb') as f:
-            f.write(datos_descifrados)
+        datos_descifrados_aes= unpad(cipher.decrypt(datos_cifrados), AES.block_size)
+        hill_key_matrix_inv= inversa_modular_matriz(hill_key_matrix)
+        texto_descifrado_hill= hill_cipher_decrypt(datos_descifrados_aes.decode(), hill_key_matrix_inv)
+        with open(archivo_salida, 'w') as f:
+            f.write(texto_descifrado_hill)
         print(f"Archivo descifrado guardado en {archivo_salida}")
-        messagebox.showinfo("Éxito", "Archivo desencriptado correctamente.")
+        messagebox.showinfo("buena", "Archivo desencriptado correctamente.")
     except Exception as e:
         print(f"Error al descifrar el archivo: {e}")
 
 #interfaz
 def seleccionar_archivo():
     global archivo_a_cifrar
-    archivo_a_cifrar = filedialog.askopenfilename(title="Seleccionar archivo")
+    archivo_a_cifrar= filedialog.askopenfilename(title="Seleccionar archivo")
     if archivo_a_cifrar:
         lbl_archivo.config(text=f"Archivo seleccionado: {os.path.basename(archivo_a_cifrar)}")
-
+        
 def grabar_clave_encriptado():
-    audio = grabar_audio(guardar_como="clave_encriptado.wav")
+    audio= grabar_audio(guardar_como="clave_encriptado.wav")
     if audio is not None:
-        global huella_original
-        huella_original = calcular_huella_espectral(audio)
-        texto = transcribir_audio_en_memoria("clave_encriptado.wav")
-        global matriz_original
-        matriz_original = texto_a_matriz_numerica(texto) if texto else None
+        global huella_original, matriz_original
+        huella_original= calcular_huella_espectral(audio)
+        texto= transcribir_audio_en_memoria("clave_encriptado.wav")
+        matriz_original= texto_a_matriz_numerica(texto) if texto else None
         messagebox.showinfo("Éxito", "Clave de encriptado grabada correctamente.")
 
-def encriptar():
-    if archivo_a_cifrar and matriz_original is not None:
-        encriptar_archivo(archivo_a_cifrar, matriz_original, "archivo_cifrado.aes")
-    else:
-        messagebox.showerror("Error", "Selecciona un archivo y graba la clave para encriptar.")
-
 def grabar_clave_desencriptado():
-    audio = grabar_audio(guardar_como="clave_desencriptado.wav")
+    audio= grabar_audio(guardar_como="clave_desencriptado.wav")
     if audio is not None:
-        huella_descifrado = calcular_huella_espectral(audio)
+        huella_descifrado= calcular_huella_espectral(audio)
         if comparar_huellas(huella_original, huella_descifrado):
-            texto = transcribir_audio_en_memoria("clave_desencriptado.wav")
-            matriz_descifrado = texto_a_matriz_numerica(texto) if texto else None
-            desencriptar_archivo("archivo_cifrado.aes", matriz_descifrado, "archivo_descifrado.txt")
+            texto= transcribir_audio_en_memoria("clave_desencriptado.wav")
+            matriz_descifrado= texto_a_matriz_numerica(texto) if texto else None
+            desencriptar_archivo("archivo_cifrado.aes", matriz_descifrado, np.array([[3, 3], [2, 5]]), "archivo_descifrado.txt")
         else:
             messagebox.showerror("Error", "Las huellas de las claves no coinciden.")
 
-#UI
+def encriptar():
+    if archivo_a_cifrar and matriz_original is not None:
+        hill_key_matrix= np.array([[3, 3], [2, 5]])
+        doble_encriptacion_hill_aes(archivo_a_cifrar, hill_key_matrix, matriz_original, "archivo_cifrado.aes")
+    else:
+        messagebox.showerror("Error", "Selecciona un archivo y graba la clave para encriptar.")
 
-root = tk.Tk()
+#interfaz principal
+root= tk.Tk()
 root.title("Encriptador de Archivos con Audio")
-root.geometry("400x300")
+root.geometry("500x400")
+root.config(bg="#f0f0f0")#color fondo
+frame = tk.Frame(root, bg="#f0f0f0")#marcos
+frame.pack(pady=20)
 
-btn_seleccionar_archivo = tk.Button(root, text="Seleccionar archivo para encriptar", command=seleccionar_archivo)
-btn_seleccionar_archivo.pack(pady=10)
+#perzonalizar botones
+def estilo_boton():
+    return {
+        #colores
+        "bg": "#4CAF50",  #fondo
+        "fg": "white",     #texto
+        "font": ("Helvetica", 12),  #tamano y fuente
+        "relief": "raised",  #3d
+        "borderwidth": 3,   #borde
+        "width": 25,        #ancho
+        "height": 2,        #altura
+        "activebackground": "#45a049",  #color al precionar
+        "activeforeground": "white",    #color texto al presionar
+        "padx": 10,         #horizontal
+        "pady": 10          #vertical
+    }
 
-lbl_archivo = tk.Label(root, text="No se ha seleccionado ningún archivo")
-lbl_archivo.pack()
+#seleccionar archivo
+btn_seleccionar_archivo = tk.Button(frame, text="Seleccionar archivo para encriptar", command=seleccionar_archivo, **estilo_boton())
+btn_seleccionar_archivo.grid(row=0, column=0, pady=10)
 
-btn_grabar_clave_encriptado = tk.Button(root, text="Grabar clave de encriptado", command=grabar_clave_encriptado)
-btn_grabar_clave_encriptado.pack(pady=10)
+#nombre del archivo
+lbl_archivo = tk.Label(frame, text="No se ha seleccionado ningún archivo", bg="#f0f0f0", font=("Helvetica", 10), width=40)
+lbl_archivo.grid(row=1, column=0, pady=10)
 
-btn_encriptar = tk.Button(root, text="Encriptar archivo", command=encriptar)
-btn_encriptar.pack(pady=10)
+#grabar clave
+btn_grabar_clave_encriptado = tk.Button(frame, text="Grabar clave de encriptado", command=grabar_clave_encriptado, **estilo_boton())
+btn_grabar_clave_encriptado.grid(row=2, column=0, pady=10)
 
-btn_grabar_clave_desencriptado = tk.Button(root, text="Grabar clave de desencriptado", command=grabar_clave_desencriptado)
-btn_grabar_clave_desencriptado.pack(pady=10)
+#encriptar
+btn_encriptar = tk.Button(frame, text="Encriptar archivo", command=encriptar, **estilo_boton())
+btn_encriptar.grid(row=3, column=0, pady=10)
 
+#grabar desencriptado
+btn_grabar_clave_desencriptado = tk.Button(frame, text="Grabar clave de desencriptado", command=grabar_clave_desencriptado, **estilo_boton())
+btn_grabar_clave_desencriptado.grid(row=4, column=0, pady=10)
+
+#inicio
 root.mainloop()
 
