@@ -39,32 +39,43 @@ def hill_cipher_decrypt(data, key_matrix_inv):
 
 def doble_encriptacion_hill_aes(nombre_archivo, hill_key_matrix, matriz_clave, archivo_salida):
     try:
-        with open(nombre_archivo, 'r') as f:
-            datos_texto = f.read()
-        texto_hill_cifrado = hill_cipher_encrypt(datos_texto.strip(), hill_key_matrix)
-        clave_aes = matriz_a_clave(matriz_clave)
-        cipher = AES.new(clave_aes, AES.MODE_CBC)
-        iv = cipher.iv
-        datos_cifrados = cipher.encrypt(pad(texto_hill_cifrado.encode(), AES.block_size))
+        with open(nombre_archivo, 'rb') as f:
+            datos= f.read()
+            
+        extension= os.path.splitext(nombre_archivo)[1].encode('utf-8')
+        extension_len= len(extension)
+        texto_hill_cifrado= hill_cipher_encrypt(datos.decode(errors="ignore"), hill_key_matrix)
+        clave_aes= matriz_a_clave(matriz_clave)
+        cipher= AES.new(clave_aes, AES.MODE_CBC)
+        iv= cipher.iv
+        datos_cifrados= cipher.encrypt(pad(texto_hill_cifrado.encode(), AES.block_size))
+        
         with open(archivo_salida, 'wb') as f:
-            f.write(iv + datos_cifrados)
-        print(f"Archivo cifrado en: {archivo_salida}")
+            f.write(extension_len.to_bytes(1, 'big')) 
+            f.write(extension)                       
+            f.write(iv)                               
+            f.write(datos_cifrados)     
+        print(f"archivo cifrado en: {archivo_salida}")
     except Exception as e:
         print(f"No se pudo realizar la doble encriptación: {e}")
 
-def desencriptar_archivo(nombre_archivo_cifrado, matriz_clave_descifrado, hill_key_matrix, archivo_salida):
+def desencriptar_archivo(nombre_archivo_cifrado, matriz_clave_descifrado, hill_key_matrix, archivo_salida_base):
     try:
         with open(nombre_archivo_cifrado, 'rb') as f:
-            contenido = f.read()
-        iv = contenido[:16]
-        datos_cifrados = contenido[16:]
-        clave_descifrado = matriz_a_clave(matriz_clave_descifrado)
-        cipher = AES.new(clave_descifrado, AES.MODE_CBC, iv)
-        datos_descifrados_aes = unpad(cipher.decrypt(datos_cifrados), AES.block_size)
-        hill_key_matrix_inv = inversa_modular_matriz(hill_key_matrix)
-        texto_descifrado_hill = hill_cipher_decrypt(datos_descifrados_aes.decode(), hill_key_matrix_inv)
-        with open(archivo_salida, 'w') as f:
-            f.write(texto_descifrado_hill)
-        print(f"Archivo descifrado guardado en {archivo_salida}")
+            extension_len= int.from_bytes(f.read(1), 'big')
+            extension= f.read(extension_len).decode('utf-8')
+            iv= f.read(16)
+            datos_cifrados= f.read()
+            
+        clave_descifrado= matriz_a_clave(matriz_clave_descifrado)
+        cipher= AES.new(clave_descifrado, AES.MODE_CBC, iv)
+        datos_descifrados_aes= unpad(cipher.decrypt(datos_cifrados), AES.block_size)
+        hill_key_matrix_inv= inversa_modular_matriz(hill_key_matrix)
+        texto_descifrado_hill= hill_cipher_decrypt(datos_descifrados_aes.decode(errors="ignore"), hill_key_matrix_inv)
+        archivo_salida_base= os.path.splitext(archivo_salida_base)[0]
+        archivo_salida= archivo_salida_base+extension
+        with open(archivo_salida, 'wb') as f:
+            f.write(texto_descifrado_hill.encode())
+        print(f"archivo descifrado guardado en {archivo_salida}")
     except Exception as e:
         print(f"Error al descifrar el archivo: {e}")
