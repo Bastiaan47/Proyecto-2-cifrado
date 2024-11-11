@@ -1,7 +1,7 @@
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
-from PIL import Image, ImageTk  # Para cargar la imagen de fondo
-import threading  # Para la animación
+from PIL import Image, ImageTk  
+import threading  
 import time
 import os
 import numpy as np
@@ -24,36 +24,44 @@ def mostrar_mensaje(texto):
     lbl_estado.update()
 
 def grabar_clave_encriptado():
-    mostrar_mensaje("Grabando clave de encriptado...")
-    audio = grabar_audio(guardar_como="clave_encriptado.wav")
+    if archivo_a_cifrar is None:
+        mostrar_mensaje("seleccione un archivo para grabar la clave.")
+        messagebox.showwarning("Advertencia", "seleccione un archivo antes de grabar la clave de encriptado.")
+        return
+    
+    mostrar_mensaje("grabando clave de encriptado...")
+    audio= grabar_audio(guardar_como="clave_encriptado.wav")
     if audio is not None:
         global huella_original, matriz_original
-        huella_original = calcular_huella_espectral(audio)
-        texto = transcribir_audio_en_memoria("clave_encriptado.wav")
-        matriz_original = texto_a_matriz_numerica(texto) if texto else None
+        huella_original= calcular_huella_espectral(audio)
+        texto= transcribir_audio_en_memoria("clave_encriptado.wav")
+        matriz_original= texto_a_matriz_numerica(texto) if texto else None
         mostrar_mensaje("Clave de encriptado grabada correctamente.")
         messagebox.showinfo("Éxito", "Clave de encriptado grabada correctamente.")
 
 def grabar_clave_desencriptado():
+    if archivo_a_cifrar is None:
+        mostrar_mensaje("Seleccione un archivo para grabar la clave.")
+        messagebox.showwarning("Advertencia", "Seleccione un archivo antes de grabar la clave de desencriptado.")
+        return
+    
     mostrar_mensaje("Grabando clave de desencriptado...")
-    audio = grabar_audio(guardar_como="clave_desencriptado.wav")
+    audio= grabar_audio(guardar_como="clave_desencriptado.wav")
     if audio is not None:
-        huella_descifrado = calcular_huella_espectral(audio)
+        huella_descifrado= calcular_huella_espectral(audio)
         if comparar_huellas(huella_original, huella_descifrado):
-            texto = transcribir_audio_en_memoria("clave_desencriptado.wav")
-            matriz_descifrado = texto_a_matriz_numerica(texto) if texto else None
+            texto= transcribir_audio_en_memoria("clave_desencriptado.wav")
+            matriz_descifrado= texto_a_matriz_numerica(texto) if texto else None
             try:
-                desencriptar_archivo("archivo_cifrado.aes", matriz_descifrado, np.array([[3, 3], [2, 5]]), "archivo_descifrado.txt")
-                #mostrar_mensaje("Archivo desencriptado correctamente.")
-                #messagebox.showinfo("Éxito", "Archivo desencriptado correctamente.")
+                desencriptar_archivo("archivo_cifrado.aes", matriz_descifrado, np.array([[3,3], [2,5]]), "archivo_descifrado.txt")
+                mostrar_mensaje("Archivo desencriptado correctamente.")
+                messagebox.showinfo("Exito", "Archivo desencriptado correctamente.")
             except ValueError as e:
-                # Captura el error de padding inválido o cualquier otro problema de desencriptación
                 mostrar_mensaje("Error: Fallo en la desencriptación, padding inválido o clave incorrecta.")
                 messagebox.showerror("Error", "Fallo en la desencriptación. Verifica la clave y vuelve a intentarlo.")
         else:
             mostrar_mensaje("Error: Las huellas de las claves no coinciden.")
             messagebox.showerror("Error", "Las huellas de las claves no coinciden.")
-
 
 def verificar_preparativos():
     if not archivo_a_cifrar:
