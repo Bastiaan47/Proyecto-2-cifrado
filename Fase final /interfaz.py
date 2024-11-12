@@ -44,25 +44,35 @@ def grabar_clave_desencriptado():
         mostrar_mensaje("Seleccione un archivo para grabar la clave.")
         messagebox.showwarning("Advertencia", "Seleccione un archivo antes de grabar la clave de desencriptado.")
         return
-    
     mostrar_mensaje("Grabando clave de desencriptado...")
-    audio= grabar_audio(guardar_como="clave_desencriptado.wav")
+    audio = grabar_audio(guardar_como="clave_desencriptado.wav")
     if audio is not None:
         huella_descifrado= calcular_huella_espectral(audio)
         if comparar_huellas(huella_original, huella_descifrado):
             texto= transcribir_audio_en_memoria("clave_desencriptado.wav")
-            matriz_descifrado= texto_a_matriz_numerica(texto) if texto else None
-            try:
-                desencriptar_archivo("archivo_cifrado.aes", matriz_descifrado, np.array([[3,3], [2,5]]), "archivo_descifrado.txt")
-                mostrar_mensaje("Archivo desencriptado correctamente.")
-                messagebox.showinfo("Exito", "Archivo desencriptado correctamente.")
-            except ValueError as e:
-                mostrar_mensaje("Error: Fallo en la desencriptación, padding inválido o clave incorrecta.")
-                messagebox.showerror("Error", "Fallo en la desencriptación. Verifica la clave y vuelve a intentarlo.")
-        else:
-            mostrar_mensaje("Error: Las huellas de las claves no coinciden.")
-            messagebox.showerror("Error", "Las huellas de las claves no coinciden.")
+            matriz_descifrado= texto_a_matriz_numerica(texto) if texto else None    
+            if matriz_descifrado is not None and not np.array_equal(matriz_descifrado, matriz_original):
+                mostrar_mensaje("Clave de desencriptado incorrecta, vuelva a grabar.")
+                messagebox.showerror("Error", "Clave de desencriptado incorrecta, vuelva a grabar.")
+                return
 
+            try:
+                desencriptar_archivo("archivo_cifrado.aes", matriz_descifrado, np.array([[3, 3], [2, 5]]), "archivo_descifrado.txt")
+                mostrar_mensaje("Archivo desencriptado correctamente.")
+                messagebox.showinfo("Éxito", "Archivo desencriptado correctamente.")
+            
+            except Exception as e:
+                if "padding" in str(e).lower() or "incorrect" in str(e).lower():
+                    mostrar_mensaje("Clave de desencriptado incorrecta, vuelva a grabar.")
+                    messagebox.showerror("Error", "Clave de desencriptado incorrecta, vuelva a grabar.")
+                else:
+                    mostrar_mensaje("Error al descifrar el archivo.")
+                    messagebox.showerror("Error", f"Error al descifrar el archivo: {e}")
+                return
+        else:
+            mostrar_mensaje("Clave de desencriptado incorrecta, vuelva a grabar.")
+            messagebox.showerror("Error", "Clave de desencriptado incorrecta, vuelva a grabar.")
+            
 def verificar_preparativos():
     if not archivo_a_cifrar:
         messagebox.showwarning("Advertencia", "Selecciona un archivo antes de continuar.")
