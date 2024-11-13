@@ -54,9 +54,14 @@ def grabar_clave_desencriptado():
         mostrar_mensaje("Grabe una clave de encriptado antes de proceder.")
         messagebox.showwarning("Advertencia", "Grabe una clave de encriptado antes de proceder.")
         return
+    
+    if not os.path.exists("archivo_cifrado.aes"):
+        mostrar_mensaje("Primero encripte el archivo antes de grabar la clave de desencriptado.")
+        messagebox.showwarning("Advertencia", "Primero encripte el archivo antes de continuar.")
+        return
 
     mostrar_mensaje("Grabando clave de desencriptado...")
-    audio= grabar_audio(guardar_como="clave_desencriptado.wav")
+    audio = grabar_audio(guardar_como="clave_desencriptado.wav")
     
     if audio is not None:
         huella_descifrado = calcular_caract_Frecuencias(audio)
